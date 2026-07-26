@@ -1,11 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt, { JwtPayload } from 'jsonwebtoken';
-import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 import { User } from '../models/user.model';
 import { AppError } from '../middleware/error.middleware';
 import { sendEmail } from '../utils/email.util';
-import { JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, JWT_ACCESS_EXPIRES_IN, JWT_REFRESH_EXPIRES_IN } from '../config/env.config';
+import {
+  JWT_ACCESS_SECRET,
+  JWT_REFRESH_SECRET,
+  JWT_ACCESS_EXPIRES_IN,
+  JWT_REFRESH_EXPIRES_IN,
+} from '../config/env.config';
 
 /**
  * AuthService handles core authentication logic:
@@ -34,7 +39,7 @@ export class AuthService {
 
     // Create user
     const user = await User.create({
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       email,
       name,
       password: hashedPassword,
@@ -45,9 +50,10 @@ export class AuthService {
     const accessToken = this.generateAccessToken(user);
     const refreshToken = this.generateRefreshToken(user);
 
-    // Store refresh token hash (optional, for revocation)
-    // For simplicity, we store plain token; in production hash it.
-    user.refreshToken = refreshToken;
+    // Store hashed refresh token for rotation/revocation
+    const refreshTokenSalt = await bcrypt.genSalt(10);
+    const hashedRefreshToken = await bcrypt.hash(refreshToken, refreshTokenSalt);
+    user.refreshToken = hashedRefreshToken;
     await user.save();
 
     return {
@@ -58,7 +64,7 @@ export class AuthService {
         isVerified: user.isVerified,
       },
       accessToken,
-      refreshToken,
+      refreshToken, // plain token sent to client only once
     };
   }
 
@@ -83,8 +89,10 @@ export class AuthService {
     const accessToken = this.generateAccessToken(user);
     const refreshToken = this.generateRefreshToken(user);
 
-    // Update refresh token
-    user.refreshToken = refreshToken;
+    // Update stored refresh token hash
+    const refreshTokenSalt = await bcrypt.genSalt(10);
+    const hashedRefreshToken = await bcrypt.hash(refreshToken, refreshTokenSalt);
+    user.refreshToken = hashedRefreshToken;
     await user.save();
 
     return {
@@ -95,7 +103,7 @@ export class AuthService {
         isVerified: user.isVerified,
       },
       accessToken,
-      refreshToken,
+      refreshToken, // plain token sent to client only once
     };
   }
 
@@ -110,17 +118,17 @@ export class AuthService {
       return { message: 'If the email exists, a reset link has been sent.' };
     }
 
-    const resetToken = uuidv4();
+    const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenExpires = Date.now() + 3600000; // 1 hour
 
-    // Save token hash (we hash the token before storing)
+    // Hash token before storing
     const salt = await bcrypt.genSalt(10);
     const resetTokenHash = await bcrypt.hash(resetToken, salt);
     user.resetToken = resetTokenHash;
     user.resetTokenExpires = resetTokenExpires;
     await user.save();
 
-    // Construct reset URL (in production use frontend domain from env)
+    // Construct reset URL (frontend domain from env)
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
 
     // Send email
@@ -138,7 +146,7 @@ export class AuthService {
 
   /**
    * Reset password using token
-   * @param token - reset token received via email
+   * @param token - reset token received via email (plain)
    * @param newPassword - new password to set
    */
   static async resetPassword(token: string, newPassword: string) {
@@ -167,7 +175,7 @@ export class AuthService {
     user.resetTokenExpires = null;
     await user.save();
 
-    // Invalidate all sessions by changing refresh token (optional)
+    // Invalidate sessions by clearing refresh token hash (optional)
     user.refreshToken = null;
     await user.save();
 
