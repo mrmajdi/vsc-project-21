@@ -1,18 +1,19 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useSession, signIn, signOut } from 'next-auth/react';
-import { Search, User, Menu, LogOut } from 'lucide-react';
+import { Search, User, Menu, LogOut, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
 export default function Header() {
   const { data: session, status } = useSession();
   const [searchQuery, setSearchQuery] = useState('');
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    // Implement search logic here (e.g., router.push)
-    console.log('Search:', searchQuery);
+    // TODO: implement search navigation (e.g., use router)
+    console.log('Search query:', searchQuery);
   };
 
   return (
@@ -75,9 +76,9 @@ export default function Header() {
           <div className="flex items-center space-x-4">
             {/* Mobile Menu Button */}
             <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="md:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100 focus:outline-none"
-              aria-label="Open menu"
+              aria-label="باز کردن منو"
             >
               <Menu className="h-5 w-5" aria-hidden="true" />
             </button>
@@ -91,14 +92,14 @@ export default function Header() {
                   <button
                     onClick={(e) => {
                       e.preventDefault();
-                      // Toggle user menu (could use a dropdown component)
+                      setIsUserMenuOpen(!isUserMenuOpen);
                     }}
                     className="flex items-center space-x-2 p-1 rounded-md hover:bg-gray-100 focus:outline-none"
                   >
                     {session.user?.image ? (
                       <Image
                         src={session.user.image}
-                        alt="User avatar"
+                        alt="Avatar کاربر"
                         width={24}
                         height={24}
                         className="rounded-full"
@@ -112,17 +113,27 @@ export default function Header() {
                     <span className="hidden md:block text-sm font-medium text-gray-900">
                       {session.user?.name}
                     </span>
+                    <ChevronDown className="h-4 w-4 text-gray-400 group-hover:text-gray-600 transition-colors" aria-hidden="true" />
                   </button>
-                  {/* Optional user dropdown could go here */}
-                </div>
 
-                {/* Sign Out Button */}
-                <button
-                  onClick={() => signOut({ callbackUrl: '/' })}
-                  className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm"
-                >
-                  خروج
-                </button>
+                  {/* User Dropdown (simple) */}
+                  {isUserMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-2 z-20">
+                      <Link
+                        href="/profile"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        پروفایل
+                      </Link>
+                      <button
+                        onClick={() => signOut({ callbackUrl: '/' })}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        خروج
+                      </button>
+                    </div>
+                  )}
+                </div>
               </>
             ) : (
               <>
@@ -147,7 +158,7 @@ export default function Header() {
         {/* Mobile Menu */}
         <nav
           className={`md:hidden mt-6 space-y-4 ${
-            isMenuOpen ? 'block' : 'hidden'
+            isMobileMenuOpen ? 'block' : 'hidden'
           }`}
         >
           <Link
@@ -190,24 +201,4 @@ export default function Header() {
             />
             <button
               type="submit"
-              className="px-3 py-2 bg-indigo-600 text-white rounded-r-lg hover:bg-indigo-700 transition-colors"
-            >
-              <Search className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </form>
-
-          {/* Mobile Auth */}
-          {status === 'loading' ? (
-            <p className="px-4 py-2 text-gray-500 text-center">در حال بارگذاری...</p>
-          ) : session ? (
-            <>
-              <div className="flex items-center space-x-3 px-4 py-2">
-                {session.user?.image ? (
-                  <Image
-                    src={session.user.image}
-                    alt="User avatar"
-                    width={20}
-                    height={20}
-                    className="rounded-full"
-                    priority
-                  />
+              className="px-3 py-2 bg
