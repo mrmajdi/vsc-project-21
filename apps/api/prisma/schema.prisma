@@ -1,0 +1,265 @@
+/// Prisma schema for Movie/Series download site (SQLite)
+/// Production-ready with authentication, admin, subscriptions, rich mock data support.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum Role {
+  ADMIN
+  EDITOR
+  USER
+}
+
+enum SubscriptionPlan {
+  FREE
+  BASIC
+  PREMIUM
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum DownloadQuality {
+  SD
+  HD
+  FULLHD
+  UHD
+}
+
+enum ContentType {
+  MOVIE
+  SERIES
+}
+
+enum Language {
+  FA
+  EN
+  AR
+  TR
+  RU
+}
+
+// Models
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String
+  name          String?
+  avatarUrl     String?
+  role          Role     @default(USER)
+  isActive      Boolean  @default(true)
+  emailVerified DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  sessions      Session[]
+  subscriptions Subscription[]
+  payments      Payment[]
+  reviews       Review[]
+  watchHistory  WatchHistory[]
+  downloads     Download[]
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@index([userId])
+}
+
+model Subscription {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan          SubscriptionPlan
+  startDate     DateTime @default(now())
+  endDate       DateTime?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([userId])
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount        Float
+  currency      String   @default("IRR")
+  status        PaymentStatus
+  gateway       String   @default("Zarinpal")
+  transactionId String?
+  paidAt        DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([userId])
+}
+
+model Genre {
+  id   String   @id @default(uuid())
+  name String   @unique
+  slug String @unique
+  movies MovieGenre[]
+  series SeriesGenre[]
+}
+
+model Movie {
+  id            String   @id @default(uuid())
+  title         String
+  slug          String   @unique
+  description   String?
+  releaseYear   Int?
+  durationMin   Int?
+  rating        Float    @default(0)
+  posterUrl     String?
+  backdropUrl   String?
+  trailerUrl    String?
+  imdbId        String?
+  tmdbId        Int?
+  language      Language @default(FA)
+  type          ContentType @default(MOVIE)
+  isFeatured    Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  genres        MovieGenre[]
+  downloads     Download[]
+  reviews       Review[]
+  watchHistory  WatchHistory[]
+  @@index([slug])
+}
+
+model Series {
+  id            String   @id @default(uuid())
+  title         String
+  slug          String   @unique
+  description   String?
+  releaseYear   Int?
+  rating        Float    @default(0)
+  posterUrl     String?
+  backdropUrl   String?
+  trailerUrl    String?
+  imdbId        String?
+  tmdbId        Int?
+  language      Language @default(FA)
+  type          ContentType @default(SERIES)
+  isFeatured    Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  genres        SeriesGenre[]
+  episodes      Episode[]
+  downloads     Download[]
+  reviews       Review[]
+  watchHistory  WatchHistory[]
+  @@index([slug])
+}
+
+model Episode {
+  id            String   @id @default(uuid())
+  seriesId      String
+  series        Series   @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  seasonNumber  Int
+  episodeNumber Int
+  title         String
+  description   String?
+  durationMin   Int?
+  airDate       DateTime?
+  videoUrl      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@unique([seriesId, seasonNumber, episodeNumber])
+  @@index([seriesId])
+}
+
+model MovieGenre {
+  movie   Movie   @relation(fields: [movieId], references: [id])
+  movieId String
+  genre   Genre   @relation(fields: [genreId], references: [id])
+  genreId String
+  @@id([movieId, genreId])
+}
+
+model SeriesGenre {
+  series  Series  @relation(fields: [seriesId], references: [id])
+  seriesId String
+  genre   Genre   @relation(fields: [genreId], references: [id])
+  genreId String
+  @@id([seriesId, genreId])
+}
+
+model Download {
+  id            String   @id @default(uuid())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  movieId       String?
+  movie         Movie?   @relation(fields: [movieId], references: [id], onDelete: SetNull)
+  seriesId      String?
+  series        Series?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  episodeId     String?
+  episode       Episode? @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  quality       DownloadQuality
+  fileSizeMb    Int?
+  url           String   // direct or tokenized link
+  isFree        Boolean  @default(false)
+  downloadCount Int      @default(0)
+  createdAt     DateTime @default(now())
+  @@index([userId])
+  @@index([movieId])
+  @@index([seriesId])
+  @@index([episodeId])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movieId   String?
+  movie     Movie?   @relation(fields: [movieId], references: [id], onDelete: SetNull)
+  seriesId  String?
+  series    Series?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  rating    Int      @db.Check("rating >= 1 AND rating <= 5")
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId])
+  @@index([movieId])
+  @@index([seriesId])
+}
+
+model WatchHistory {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movieId   String?
+  movie     Movie?   @relation(fields: [movieId], references: [id], onDelete: SetNull)
+  seriesId  String?
+  series    Series?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  episodeId String?
+  episode   Episode? @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  watchedAt DateTime @default(now())
+  @@index([userId])
+  @@index([movieId])
+  @@index([seriesId])
+  @@index([episodeId])
+}
+
+model AdminLog {
+  id        String   @id @default(uuid())
+  adminId   String
+  admin     User     @relation(fields: [adminId], references: [id])
+  action    String   // e.g., "CREATE_M
